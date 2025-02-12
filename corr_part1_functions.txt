@@ -1,0 +1,92 @@
+
+# ------------------------------------------------------------------------------
+# rotation matrix from the ECEF reference frame to the ENU reference frame
+# of a given station (with cartesian coordinates in ECEF frame).
+def to_sta_enu_rotation_matrix(x_sta, y_sta, z_sta):
+    """
+    Computation of the rotation matrix from the ECEF reference frame to the
+    station local ENU reference frame
+
+    @param x_sta: x station (ECEF)
+    @param y_sta: y station (ECEF)
+    @param z_sta: z station (ECEF)
+    @return:
+    """
+
+    # computation of the geographical coordinates of the reference station
+    lon = np.arctan2(y_sta, x_sta)
+    lat = np.arctan(z_sta / np.sqrt(x_sta ** 2 + y_sta ** 2))
+    alt = np.sqrt(x_sta ** 2 + y_sta ** 2 + z_sta ** 2)
+
+    R = np.array([[-np.sin(lon), np.cos(lon), 0], \
+                [-np.sin(lat) * np.cos(lon), -np.sin(lat) * np.sin(lon), np.cos(lat)], \
+                [np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)]])
+
+    # R = scl.block_diag(np.array([[-np.sin(lon), np.cos(lon), 0], \
+    #                              [-np.sin(lat) * np.cos(lon),
+    #                               -np.sin(lat) * np.sin(lon), np.cos(lat)], \
+    #                              [np.cos(lat) * np.cos(lon),
+    #                               np.cos(lat) * np.sin(lon), np.sin(lat)]]),
+    #                    1)
+
+    return R
+
+# ------------------------------------------------------------------------------
+# azimuth, elevation and distance from the station towards the spacecraft
+def to_sat_az_el_d(pos_ref, x_sat, y_sat, z_sat):
+    """
+    Computation of the satellite azimuth, elevation and range from a station
+    reference position on Earth.
+
+    The reference station coordinates and the satellites coordinates have to be
+    given in the ECEF reference frame.
+
+    @param pos_ref: station reference position numpy.array(shape=(3,))
+    @param x_sat: satelite x position (numpy.ndarray(N,))
+    @param y_sat: satelite y position (numpy.ndarray(N,))
+    @param z_sat: satelite z position (numpy.ndarray(N,))
+    @return:
+    """
+
+    x_ref = pos_ref[0]
+    y_ref = pos_ref[1]
+    z_ref = pos_ref[2]
+    R = to_sta_enu_rotation_matrix(x_ref, y_ref, z_ref)
+
+    # Rotation of the relative distance between the satellite and the station
+    east = R[0,0]*(x_sat-x_ref) + R[0,1]*(y_sat-y_ref) + R[0,2]*(z_sat-z_ref)
+    north = R[1,0]*(x_sat - x_ref) + R[1,1]*(y_sat - y_ref) + R[1,2]*(z_sat - z_ref)
+    up = R[2,0]*(x_sat - x_ref) + R[2,1]*(y_sat - y_ref) + R[2,2]*(z_sat - z_ref)
+
+
+    # east, north, up = sat_rec_ENU(pos_ref, x_sat, y_sat, z_sat)
+    az = np.arctan2(east,north)
+    d_ref = np.sqrt(east**2 + north**2 + up**2)
+    el = np.arcsin(up/d_ref)
+
+    return az, el, d_ref
+
+
+# ------------------------------------------------------------------------------
+# cosine matrix
+def cosine_matrix(x_sta, y_sta, z_sta, x_sat, y_sat, z_sat):
+    """
+    Matrice des cosinus directeurs
+    La ième ligne de H est égale à :
+    [-(x_sat(i)-x_usr)/r_i -(y_sat(i)-y_usr)/r_i -(z_sat(i)-z_usr)/r_i 1]
+
+    @param x_sta: double
+    @param y_sta: double
+    @param z_sta: double
+    @param x_sat: ndarray(nsat,)
+    @param y_sat: ndarray(nsat,)
+    @param z_sat: ndarray(nsat,)
+    @return:
+    """
+
+    n_sat = x_sat.shape[0]
+
+    r = np.sqrt((x_sta-x_sat)**2 + (y_sta-y_sat)**2 + (z_sta-z_sat)**2)
+    H = np.vstack(( (x_sta-x_sat)/r, (y_sta-y_sat)/r, (z_sta-z_sat)/r, np.ones(n_sat))).T
+
+    return H

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 ## -----------------------------------------------------------------------------
 # Data
-work_dir =
+work_dir = "data/"
 
 c = 299792458.0 # speed of light in vaccum [m/s]
 re = 6378136.0 # Earth radius [m]
@@ -42,6 +42,14 @@ measures = pd.read_csv(work_dir+'Csimu.csv',delimiter=';').values[:,2:-1].T
 
 ## -----------------------------------------------------------------------------
 # Position and clock solution computation
+'''Copied from part 1...'''
+def cosine_matrix(x_sta, y_sta, z_sta, x_sat, y_sat, z_sat):
+    n_sat = x_sat.shape[0]
+
+    r = np.sqrt((x_sta-x_sat)**2 + (y_sta - y_sat)**2 + (z_sta - z_sat)**2)
+    H = np.vstack(((x_sta - x_sat)/r, (y_sta-y_sat)/r, (z_sta-z_sat)/r, np.ones(n_sat))).T
+
+    return H
 
 sol_lse = np.zeros((n_epochs,4))
 residuals = np.zeros((n_sat,n_epochs))
@@ -77,10 +85,10 @@ for it in range(n_epochs):
                                         + (z_sat[idx_sat,it]-pk[2])**2) + pk[3] - b_sat[idx_sat,it])
 
         # direction cosine matrix
-        H =
+        H = cosine_matrix(x_ref, y_ref, z_ref, x_sat[idx_sat, it]-pk[0], y_sat[idx_sat, it]-pk[1], z_sat[idx_sat, it]-pk[2])
 
         # Solve for the increment of the unknown vector
-        dp =
+        dp = scl.inv(H.T @ H) @ H.T @ mes_residuals
 
         # update the unknown vector
         pk = pk + dp
@@ -93,8 +101,9 @@ for it in range(n_epochs):
 
     # Compute position, direction cosine matrix and measurement residual with the
     # final position
-    H_final =
-    mes_residuals_final =
+    H_final = cosine_matrix(x_ref, y_ref, z_ref, x_sat[idx_sat, it]-pk[0], y_sat[idx_sat, it]-pk[1], z_sat[idx_sat, it]-pk[2])
+    mes_residuals_final = meas_it - (np.sqrt((x_sat[idx_sat, it] - pk[0]) ** 2 + (y_sat[idx_sat, it] - pk[1]) ** 2 \
+                                       + (z_sat[idx_sat, it] - pk[2]) ** 2) + pk[3] - b_sat[idx_sat, it])
 
     # Compute the DOPs of the solution
     # R_enu =

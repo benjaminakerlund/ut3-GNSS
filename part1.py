@@ -1,15 +1,22 @@
+import math
+
 import numpy as np
 import numpy.linalg as npl
 import pandas as pd
 import matplotlib.pyplot as plt
+import scipy.linalg as scl
+
+# imports to make run on Bena's computer...
+import matplotlib
+matplotlib.use('QtAgg')
 
 
 ## -----------------------------------------------------------------------------
 # Data
-work_dir =
+work_dir = "data/"
 
-c = 299792458.0 # speed of light in vaccum [m/s]
-re = 6378136.0 # Earth radius [m]
+c = 299792458.0     # speed of light in vaccum [m/s]
+re = 6378136.0      # Earth radius [m]
 
 # reference position (from TLSG00FRA_R_20203400000_15M_01S_MO.rnx)
 x_ref = 4628684.4674
@@ -52,8 +59,19 @@ def to_sta_enu_rotation_matrix(x_sta, y_sta, z_sta):
     @return: R the rotation matrix
     """
 
+    # Calculate lat and long for the station
+        # station coordinates ECEF
+    l_sta = np.arctan( y_sta / x_sta )
+    phi_sta = np.arctan2( z_sta , np.sqrt(x_sta**2 + y_sta**2) )
+    # atan2 or arctan2 needs a "," delimiter and does the division automatically...
+
+
     # Computing the matrix
-    R =
+    R = [
+            [-np.sin(l_sta), np.cos(l_sta), 0],
+            [-np.sin(phi_sta)*np.cos(l_sta), -np.sin(phi_sta)*np.sin(l_sta), np.cos(phi_sta)],
+            [np.cos(phi_sta)*np.cos(l_sta), np.cos(phi_sta)*np.sin(l_sta), np.sin(phi_sta)]
+    ]
 
     return R
 
@@ -77,10 +95,15 @@ def to_sat_az_el_d(pos_ref, x_sat, y_sat, z_sat):
     @return: az, zl, d the azimuth, elevation, distance from the station to the
     satellite
     """
+    R = to_sta_enu_rotation_matrix(pos_ref[0], pos_ref[1], pos_ref[2])
 
-    az =
-    el =
-    d_sta_sat =
+    [delta_E_sta_sat, delta_N_sta_sat, delta_U_sta_sat] = np.matmul(
+        R, [x_sat - pos_ref[0], y_sat - pos_ref[1], z_sat - pos_ref[2]]
+    )
+
+    d_sta_sat = np.sqrt(delta_E_sta_sat**2 + delta_N_sta_sat**2 + delta_U_sta_sat**2)
+    el = np.arcsin( delta_U_sta_sat / d_sta_sat )
+    az = np.arctan2( delta_E_sta_sat , delta_N_sta_sat)
 
     return az, el, d_sta_sat
 
@@ -93,10 +116,11 @@ ax.set_theta_zero_location('N')
 ax.set_theta_direction(-1)
 
 for i_sat in range(n_sat):
-    az =
-    el =
-    d =
-
+    '''az = 0  #TODO Change
+    el = 0  #TODO Change
+    d = 0   #TODO Change
+    '''
+    [az, el, d] = to_sat_az_el_d(pos_ref, x_sat[i_sat], y_sat[i_sat], z_sat[i_sat])
     ax.plot(az, 90-el*180/np.pi,'.', markersize=3, label=sat_names[i_sat])
 
 ax.grid(True)
@@ -107,6 +131,7 @@ ax.set_ylim(0,90)
 ax.set_title("Skyplot")
 ax.legend()
 plt.draw()
+plt.show()
 
 ## -----------------------------------------------------------------------------
 # Direction cosine matrix
@@ -125,8 +150,10 @@ def cosine_matrix(x_sta, y_sta, z_sta, x_sat, y_sat, z_sat):
     @param z_sat: ndarray(nsat,)
     @return: H, ndarray, the matrix
     """
+    n_sat = x_sat.shape[0]
 
-    H =
+    r = np.sqrt((x_sta-x_sat)**2 + (y_sta - y_sat)**2 + (z_sta - z_sat)**2)
+    H = np.vstack(((x_sta - x_sat)/r, (y_sta-y_sat)/r, (z_sta-z_sat)/r, np.ones(n_sat))).T
 
     return H
 
@@ -146,11 +173,15 @@ idx_sat = np.array([0,1,2,4,5,6,7,8])
 
 for it in range(n_epochs):
 
+    Rot_mat = scl.block_diag(R_ecef2enu, 1)
 
-    pdop =
-    tdop =
-    vdop =
-    hdop =
+    H = cosine_matrix(x_ref, y_ref, z_ref, x_sat[idx_sat, it], y_sat[idx_sat, it], z_sat[idx_sat, it])
+    M_xyz = npl.inv(H.T @ H)
+    pdop = np.sqrt(np.sum(np.diag(M_xyz)[:3]))
+    tdop = np.sqrt(M_xyz[3, 3])
+    M_enu = Rot_mat @ M_xyz @ Rot_mat.T
+    vdop = np.sqrt(M_enu[2,2])
+    hdop = np.sqrt(np.sum(np.diag(M_enu)[:2]))
 
     dop[it] = np.array([pdop, tdop, hdop, vdop])
 
@@ -166,6 +197,7 @@ plt.ylabel("Dilutions of precision")
 plt.grid(True)
 plt.legend()
 plt.draw()
+plt.show()
 
 
 

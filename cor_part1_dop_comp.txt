@@ -1,0 +1,23 @@
+
+R_ecef2enu = utils.to_sta_enu_rotation_matrix(x_ref, y_ref, z_ref)
+
+dop = np.zeros((n_epochs,4))
+# If we want to consider only a subset of the satellites, change the value of idx_sat
+# idx_sat = np.arange(n_sat)
+idx_sat = np.array([0,3,4,7,8])
+# idx_sat = np.array([1,2,3,4,5,6,7])
+# idx_sat = np.array([0,1,2,4,5,6,7,8])
+
+for it in range(n_epochs):
+
+    Rot_mat = scl.block_diag(R_ecef2enu,1)
+
+    H = cosine_matrix(x_ref, y_ref, z_ref, x_sat[idx_sat, it], y_sat[idx_sat, it], z_sat[idx_sat, it])
+    M_xyz = npl.inv(H.T @ H)
+    pdop = np.sqrt(np.sum(np.diag(M_xyz)[:3]))
+    tdop = np.sqrt(M_xyz[3, 3])
+    M_enu = Rot_mat @ M_xyz @ Rot_mat.T
+    vdop = np.sqrt(M_enu[2,2])
+    hdop = np.sqrt(np.sum(np.diag(M_enu)[:2]))
+
+    dop[it] = np.array([pdop, tdop, hdop, vdop])
